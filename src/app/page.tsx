@@ -6,23 +6,22 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import SideMenu from '@/components/SideMenu';
 import { 
   Bot, 
   MessageCircle, 
   FolderOpen, 
   Settings, 
   Play, 
-  Pause, 
-  RotateCcw,
-  FileText,
+  Menu,
   Globe,
   Github,
   BarChart3,
+  FileText,
   Smartphone,
   Cpu,
   Zap,
-  Shield,
-  Database
+  Shield
 } from 'lucide-react';
 
 export default function Home() {
@@ -32,6 +31,7 @@ export default function Home() {
   const [agentStatus, setAgentStatus] = useState<'idle' | 'thinking' | 'processing'>('idle');
   const [userId] = useState('demo-user-android');
   const [mounted, setMounted] = useState(false);
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
 
   // Prevent hydration mismatch
   useEffect(() => {
@@ -161,6 +161,23 @@ export default function Home() {
                 <Cpu className="h-3 w-3 mr-1" />
                 {agents[0]?.model}
               </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSideMenuOpen(true)}
+                className="lg:hidden"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSideMenuOpen(true)}
+                className="hidden lg:flex"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Control Panel
+              </Button>
             </div>
           </div>
         </div>
@@ -339,15 +356,31 @@ export default function Home() {
                   <BarChart3 className="h-4 w-4 mr-2" />
                   Analyze Data
                 </Button>
-                <Button variant="outline" className="w-full justify-start" size="sm">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start" 
+                  size="sm"
+                  onClick={() => setSideMenuOpen(true)}
+                >
                   <Settings className="h-4 w-4 mr-2" />
-                  Settings
+                  Control Panel
                 </Button>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {/* Side Menu */}
+      <SideMenu isOpen={sideMenuOpen} onClose={() => setSideMenuOpen(false)} />
+
+      {/* Overlay */}
+      {sideMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSideMenuOpen(false)}
+        />
+      )}
     </div>
   );
 }

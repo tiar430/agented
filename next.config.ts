@@ -19,8 +19,21 @@ const nextConfig: NextConfig = {
   },
   // Allow dev origins for cross-origin requests
   allowedDevOrigins: [
-    'preview-chat-5723768f-72cc-4534-be6c-28e97e496fde.space.z.ai'
+    'preview-chat-5723768f-72cc-4534-be6c-28e97e496fde.space.z.ai',
+    'space.z.ai',
+    '*.space.z.ai'
   ],
+  // Optimize for mobile
+  compress: true,
+  // Handle external requests
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: '/api/:path*',
+      },
+    ];
+  },
 };
 
 export default nextConfig;
