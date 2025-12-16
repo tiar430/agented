@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Main AI Agent Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:password@db:5432/agented
+      - OLLAMA_URL=http://ollama:11434
+      - WEBSOCKET_PORT=3001
+    depends_on:
+      - db
+      - ollama
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    networks:
+      - agented-network
+
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=agented
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - agented-network
+
+  # Ollama AI Service
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    networks:
+      - agented-network
+    # Pull phi-2 model on startup
+    command: sh -c "ollama serve & ollama pull phi-2"
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - agented-network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - agented-network
+
+volumes:
+  postgres_data:
+  ollama_data:
+  redis_data:
+
+networks:
+  agented-network:
+    driver: bridge
