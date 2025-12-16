@@ -126,6 +126,6 @@
     "jsdom": "^23.0.0",
     "artillery": "^2.0.0",
     "webpack-bundle-analyzer": "^4.9.0",
-    "complexity-report": "^2.0.0"
+    "complexity-report": "2.0.0-alpha"
   }
 }
