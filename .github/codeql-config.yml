@@ -1,0 +1,31 @@
+name: "CodeQL Configuration"
+
+paths:
+  - 'src'
+  - 'lib'
+  - 'hooks'
+  
+paths-ignore:
+  - 'node_modules'
+  - '.next'
+  - 'out'
+  - 'coverage'
+  - 'dist'
+  - 'build'
+  
+packs:
+  allow:
+    - mozilla/rhino
+    - npm/*
+    
+languages:
+  - javascript
+
+queries:
+  - uses: security-and-quality
+
+original-paths:
+  - 'src/**/*.js'
+  - 'src/**/*.jsx'
+  - 'src/**/*.ts'
+  - 'src/**/*.tsx'

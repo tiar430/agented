@@ -1,0 +1,47 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 10
+      name: "Load test"
+    - duration: 60
+      arrivalRate: 20
+      name: "Stress test"
+
+scenarios:
+  - name: "API Load Test"
+    weight: 70
+    flow:
+      - get:
+          url: "/api/agents"
+      - think: 1
+      - get:
+          url: "/api/tasks"
+      - think: 1
+      - post:
+          url: "/api/chat"
+          json:
+            message: "Hello AI Agent"
+            agentId: "test-agent"
+            
+  - name: "Static Assets Test"
+    weight: 20
+    flow:
+      - get:
+          url: "/"
+      - get:
+          url: "/_next/static/css/app/layout.css"
+      - get:
+          url: "/_next/static/chunks/main-app.js"
+      
+  - name: "WebSocket Connection Test"
+    weight: 10
+    engine: ws
+    flow:
+      - connect:
+          target: "ws://localhost:3001"
+      - send: "Hello WebSocket"
+      - think: 2
