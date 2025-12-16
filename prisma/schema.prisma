@@ -19,6 +19,137 @@ model User {
   name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  // AI Agent Relations
+  aiAgents  AIAgent[]
+  tasks     Task[]
+  sessions  Session[]
+}
+
+model AIAgent {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  model       String   @default("phi-2")
+  status      String   @default("inactive") // active, inactive, training
+  config      Json?    // Configuration for the agent
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  sessions    Session[]
+  capabilities Capability[]
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  type        String   // file_management, web_scraping, data_analysis, etc.
+  status      String   @default("pending") // pending, running, completed, failed
+  priority    String   @default("medium") // low, medium, high
+  input       Json?    // Input data for the task
+  output      Json?    // Output data from the task
+  error       String?  // Error message if failed
+  userId      String
+  agentId     String?
+  sessionId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+  
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent       AIAgent? @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  session     Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  title       String?
+  startTime   DateTime @default(now())
+  endTime     DateTime?
+  status      String   @default("active") // active, completed, terminated
+  context     Json?    // Session context and conversation history
+  userId      String
+  agentId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent       AIAgent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  messages    Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  type      String   @default("user") // user, assistant, system
+  metadata  Json?    // Additional metadata
+  sessionId String
+  createdAt DateTime @default(now())
+  
+  // Relations
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model Capability {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  type        String   // mcp, builtin, custom
+  config      Json?    // Configuration for the capability
+  enabled     Boolean  @default(true)
+  agentId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  agent       AIAgent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+model MCPConnection {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  type        String   // playwright, github, filesystem, etc.
+  endpoint    String?
+  config      Json     // Connection configuration
+  status      String   @default("disconnected") // connected, disconnected, error
+  lastUsed    DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FileSystemEntry {
+  id           String   @id @default(cuid())
+  path         String   @unique
+  name         String
+  type         String   // file, directory
+  size         Int?
+  mimeType     String?
+  permissions  String?
+  lastModified DateTime?
+  metadata     Json?    // Additional file metadata
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model FileOperation {
+  id          String   @id @default(cuid())
+  type        String   // create, read, update, delete, move, copy
+  sourcePath  String?
+  targetPath  String?
+  status      String   @default("pending") // pending, running, completed, failed
+  error       String?
+  metadata    Json?    // Operation metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
 }
 
 model Post {
