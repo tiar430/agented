@@ -205,6 +205,49 @@ chmod +x build-android.sh
 ./build-android.sh
 ```
 
+### 🤖 GitHub Actions CI/CD
+
+This project includes comprehensive GitHub Actions workflows for automated building, testing, and deployment:
+
+#### 🔄 Automated Workflows
+- **🏗️ Build Android APK**: Automated APK builds for debug and release
+- **🧪 Test & Quality**: Comprehensive testing (unit, integration, security, performance)
+- **📦 Release & Deploy**: Automated releases with GitHub Releases
+- **🔧 Maintenance**: Dependency updates and code quality monitoring
+
+#### 📱 APK Building
+- **Debug APKs**: For development and testing
+- **Release APKs**: Signed APKs for production distribution
+- **Termux Packages**: `.deb` packages for Termux installation
+- **Automatic Releases**: Triggered by version tags (e.g., `v1.0.0`)
+
+#### 🧪 Quality Assurance
+- **Code Quality**: ESLint, Prettier, TypeScript checks
+- **Testing**: Unit, integration, API, and mobile compatibility tests
+- **Security**: Vulnerability scanning with Snyk and CodeQL
+- **Performance**: Lighthouse CI and load testing
+
+#### 📊 Monitoring
+- **Build Status**: Real-time workflow monitoring
+- **Test Coverage**: Automated coverage reporting
+- **Security Reports**: Vulnerability detection and reporting
+- **Performance Metrics**: Bundle analysis and optimization
+
+#### 🚀 Quick Release
+Create and push a version tag to trigger automated release:
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+This will automatically:
+- Build debug and release APKs
+- Create GitHub Release with changelog
+- Deploy documentation to GitHub Pages
+- Generate Termux packages
+
+📖 **Detailed Documentation**: See [GitHub Actions Guide](docs/GITHUB_ACTIONS.md)
+
 ## 📚 API Documentation
 
 ### Core Endpoints
