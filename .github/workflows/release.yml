@@ -1,0 +1,268 @@
+name: Release and Deploy
+
+on:
+  push:
+    tags: 
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      release_notes:
+        description: 'Release notes'
+        required: false
+        default: 'Automated release'
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Get version
+      id: get_version
+      run: |
+        if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+        
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get previous tag
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        # Generate changelog
+        if [ -n "$PREVIOUS_TAG" ]; then
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD)
+        else
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)")
+        fi
+        
+        # Save to file
+        echo "$CHANGELOG" > CHANGELOG.md
+        
+        # Set output
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        release_name: AI Agent ${{ steps.get_version.outputs.version }}
+        body: |
+          ## 🚀 AI Agent ${{ steps.get_version.outputs.version }}
+          
+          ${{ github.event.inputs.release_notes }}
+          
+          ### 📋 Changes
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ### 📱 Downloads
+          - **APK (Android)**: `agented-${{ steps.get_version.outputs.version }}.apk`
+          - **Termux Package**: `agented-termux-${{ steps.get_version.outputs.version }}.deb`
+          - **Source Code**: Available in this release
+          
+          ### 🔧 Installation
+          
+          **Android APK:**
+          1. Download the APK file
+          2. Enable "Install from unknown sources" in Android settings
+          3. Install the APK
+          
+          **Termux Package:**
+          1. Install Termux from F-Droid
+          2. Download the .deb package
+          3. Run: `pkg install agented-termux-*.deb`
+          
+          ### 📚 Documentation
+          - [Setup Guide](https://github.com/tiar430/agented/wiki)
+          - [API Documentation](https://github.com/tiar430/agented/blob/main/docs/API.md)
+          - [Mobile Setup](https://github.com/tiar430/agented/blob/main/README-ANDROID.md)
+        draft: false
+        prerelease: false
+
+  build-and-upload:
+    name: Build and Upload Assets
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [debug, release]
+        
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Build application
+      run: bun run build
+      
+    - name: Setup Android build environment
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 33
+        build-tools: 33.0.2
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Build APK
+      run: |
+        # Reuse the build logic from build-android.yml
+        mkdir -p android/agented
+        cd android/agented
+        
+        # Initialize Cordova project
+        npm install -g cordova
+        cordova create . com.tiar430.agented "AI Agent"
+        cordova platform add android@latest
+        
+        # Copy web assets
+        cp -r ../../out/* www/
+        cp -r ../../public/* www/
+        
+        # Configure app
+        cat > config.xml << 'EOF'
+        <?xml version='1.0' encoding='utf-8'?>
+        <widget id="com.tiar430.agented" version="${{ needs.create-release.outputs.version }}" xmlns="http://www.w3.org/ns/widgets">
+            <name>AI Agent</name>
+            <description>AI Agent for Android with Termux integration</description>
+            <author email="tiar430@users.noreply.github.com" href="https://github.com/tiar430">tiar430</author>
+            <content src="index.html" />
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+            <preference name="android-minSdkVersion" value="21" />
+            <preference name="android-targetSdkVersion" value="33" />
+        </widget>
+        EOF
+        
+        # Build APK
+        if [ "${{ matrix.build_type }}" = "release" ]; then
+          cordova build android --release
+        else
+          cordova build android --debug
+        fi
+        
+    - name: Sign Release APK
+      if: matrix.build_type == 'release'
+      run: |
+        cd android/agented
+        if [ -f platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+          # Create keystore
+          keytool -genkey -v -keystore agented-release.keystore -alias agented -keyalg RSA -keysize 2048 -validity 10000 -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -keypass "${{ secrets.KEY_PASSWORD }}" -dname "CN=AI Agent, OU=Development, O=tiar430"
+          
+          # Sign APK
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore agented-release.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -keypass "${{ secrets.KEY_PASSWORD }}" platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk agented
+          
+          # Align APK
+          ${ANDROID_HOME}/build-tools/33.0.2/zipalign -v 4 platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk platforms/android/app/build/outputs/apk/release/app-release-aligned.apk
+        fi
+        
+    - name: Upload APK to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: android/agented/platforms/android/app/build/outputs/apk/${{ matrix.build_type }}/app-${{ matrix.build_type }}.apk
+        asset_name: agented-${{ needs.create-release.outputs.version }}-${{ matrix.build_type }}.apk
+        asset_content_type: application/vnd.android.package-archive
+
+  deploy-docs:
+    name: Deploy Documentation
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Install dependencies
+      run: bun install
+      
+    - name: Build documentation
+      run: |
+        # Generate API documentation
+        bun run docs:generate
+        
+        # Build static docs site
+        bun run docs:build
+        
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/dist
+        destination_dir: docs
+        
+    - name: Update Documentation URL
+      run: |
+        echo "Documentation deployed to: https://tiar430.github.io/agented/docs/"
+
+  notify-release:
+    name: Notify Release
+    needs: [create-release, build-and-upload, deploy-docs]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify Success
+      if: needs.build-and-upload.result == 'success'
+      run: |
+        echo "🎉 Release ${{ needs.create-release.outputs.version }} created successfully!"
+        echo "📱 APK files are available in the release"
+        echo "📚 Documentation deployed to GitHub Pages"
+        
+    - name: Notify Failure
+      if: needs.build-and-upload.result == 'failure'
+      run: |
+        echo "❌ Release ${{ needs.create-release.outputs.version }} failed!"
+        echo "Please check the workflow logs for details"
+        exit 1

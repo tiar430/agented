@@ -1,0 +1,40 @@
+{
+  "name": "websocket-service",
+  "version": "1.0.0",
+  "description": "WebSocket service for AI Agent real-time communication",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "bun --hot index.ts",
+    "start": "bun index.ts",
+    "build": "bun build index.ts --outdir dist --target bun",
+    "lint": "eslint . --ext .ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.0",
+    "winston": "^3.11.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.0",
+    "@types/uuid": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  },
+  "keywords": [
+    "websocket",
+    "socket.io",
+    "real-time",
+    "ai-agent",
+    "android"
+  ],
+  "author": "Senior Software Developer - Mobile Apps & Debugging Engineer",
+  "license": "MIT"
+}

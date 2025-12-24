@@ -1,0 +1,280 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+        - debug
+        - release
+
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '17'
+  FLUTTER_VERSION: '3.16.0'
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v1
+      with:
+        bun-version: latest
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: ${{ env.JAVA_VERSION }}
+        
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 33
+        build-tools: 33.0.2
+        
+    - name: Cache Node modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.npm
+          ~/.bun/install/cache
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+          
+    - name: Install dependencies
+      run: |
+        bun install
+        
+    - name: Setup environment
+      run: |
+        echo "NODE_ENV=production" >> .env.production
+        echo "NEXT_PUBLIC_APP_VERSION=${{ github.ref_name }}" >> .env.production
+        echo "NEXT_PUBLIC_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> .env.production
+        
+    - name: Build Next.js application
+      run: |
+        bun run build
+        
+    - name: Create Android project structure
+      run: |
+        mkdir -p android/app/src/main
+        mkdir -p android/app/src/main/assets
+        mkdir -p android/app/src/main/res/values
+        
+    - name: Setup Cordova/PhoneGap environment
+      run: |
+        npm install -g cordova
+        npm install -g phonegap
+        
+    - name: Create Cordova project
+      run: |
+        cd android
+        cordova create agented com.tiar430.agented "AI Agent"
+        cd agented
+        
+    - name: Add Android platform
+      run: |
+        cd android/agented
+        cordova platform add android@latest
+        
+    - name: Copy built web assets
+      run: |
+        cp -r out/* android/agented/www/
+        cp -r public/* android/agented/www/
+        
+    - name: Configure Android permissions
+      run: |
+        cat > android/agented/config.xml << 'EOF'
+        <?xml version='1.0' encoding='utf-8'?>
+        <widget id="com.tiar430.agented" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+            <name>AI Agent</name>
+            <description>
+                A comprehensive AI Agent system for Android devices with Termux integration.
+            </description>
+            <author email="tiar430@users.noreply.github.com" href="https://github.com/tiar430">
+                tiar430
+            </author>
+            <content src="index.html" />
+            
+            <!-- Required permissions -->
+            <uses-permission android:name="android.permission.INTERNET" />
+            <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+            <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+            
+            <!-- Optional permissions for enhanced functionality -->
+            <uses-permission android:name="android.permission.CAMERA" />
+            <uses-permission android:name="android.permission.RECORD_AUDIO" />
+            <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+            <uses-permission android:name="android.permission.WAKE_LOCK" />
+            <uses-permission android:name="android.permission.VIBRATE" />
+            
+            <!-- Preferences -->
+            <preference name="DisallowOverscroll" value="true" />
+            <preference name="android-minSdkVersion" value="21" />
+            <preference name="android-targetSdkVersion" value="33" />
+            <preference name="Orientation" value="default" />
+            <preference name="Fullscreen" value="false" />
+            <preference name="StatusBarOverlaysWebView" value="true" />
+            <preference name="StatusBarBackgroundColor" value="#000000" />
+            <preference name="StatusBarStyle" value="lightcontent" />
+            
+            <!-- Plugins -->
+            <plugin name="cordova-plugin-whitelist" spec="1" />
+            <plugin name="cordova-plugin-device" spec="2.0.2" />
+            <plugin name="cordova-plugin-network-information" spec="2.0.1" />
+            <plugin name="cordova-plugin-file" spec="6.0.2" />
+            <plugin name="cordova-plugin-file-transfer" spec="1.7.1" />
+            
+            <allow-intent href="http://*/*" />
+            <allow-intent href="https://*/*" />
+            <allow-intent href="tel:*" />
+            <allow-intent href="sms:*" />
+            <allow-intent href="mailto:*" />
+            <allow-intent href="geo:*" />
+            
+            <platform name="android">
+                <allow-intent href="market:*" />
+                <icon density="ldpi" src="res/android/ldpi.png" />
+                <icon density="mdpi" src="res/android/mdpi.png" />
+                <icon density="hdpi" src="res/android/hdpi.png" />
+                <icon density="xhdpi" src="res/android/xhdpi.png" />
+                <icon density="xxhdpi" src="res/android/xxhdpi.png" />
+                <icon density="xxxhdpi" src="res/android/xxxhdpi.png" />
+            </platform>
+        </widget>
+        EOF
+        
+    - name: Create app icons
+      run: |
+        # Create simple placeholder icons
+        mkdir -p android/agented/res/android
+        for size in 36 48 72 96 144 192; do
+          convert -size ${size}x${size} xc:blue -pointsize ${size/3} -fill white -gravity center -annotate +0+0 "AI" android/agented/res/android/${size}dpi.png 2>/dev/null || \
+            echo "Creating placeholder icon for ${size}dpi"
+        done
+        
+    - name: Build APK
+      run: |
+        cd android/agented
+        
+        # Determine build type
+        if [ "${{ github.event.inputs.build_type }}" = "debug" ] || [ "${{ github.ref }}" != "refs/tags/*" ]; then
+          echo "Building debug APK..."
+          cordova build android --debug
+        else
+          echo "Building release APK..."
+          cordova build android --release
+        fi
+        
+    - name: Sign APK (Release builds only)
+      if: github.ref == 'refs/tags/*'
+      run: |
+        cd android/agented
+        if [ -f platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+          echo "Signing release APK..."
+          # Create keystore (in production, use secrets)
+          keytool -genkey -v -keystore agented-release.keystore -alias agented -keyalg RSA -keysize 2048 -validity 10000 -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -keypass "${{ secrets.KEY_PASSWORD }}" -dname "CN=AI Agent, OU=Development, O=tiar430, L=Unknown, ST=Unknown, C=US"
+          
+          # Sign the APK
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore agented-release.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -keypass "${{ secrets.KEY_PASSWORD }}" platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk agented
+          
+          # Align the APK
+          ${ANDROID_HOME}/build-tools/33.0.2/zipalign -v 4 platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk platforms/android/app/build/outputs/apk/release/app-release-aligned.apk
+        fi
+        
+    - name: Upload APK artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: agented-apk-${{ github.event.inputs.build_type || 'debug' }}
+        path: |
+          android/agented/platforms/android/app/build/outputs/apk/**/*.apk
+          android/agented/platforms/android/app/build/outputs/apk/**/*.aab
+        retention-days: 30
+        
+    - name: Create Release
+      if: github.ref == 'refs/tags/*'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          android/agented/platforms/android/app/build/outputs/apk/**/*.apk
+          android/agented/platforms/android/app/build/outputs/apk/**/*.aab
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Build Termux Package
+      run: |
+        mkdir -p termux-package
+        cd termux-package
+        
+        # Create Termux package structure
+        mkdir -p DEBIAN
+        mkdir -p data/data/com.termux/files/usr/bin
+        mkdir -p data/data/com.termux/files/usr/share/agented
+        
+        # Create control file
+        cat > DEBIAN/control << 'EOF'
+        Package: agented
+        Version: 1.0.0
+        Section: utils
+        Priority: optional
+        Architecture: all
+        Depends: termux-tools, nodejs, python
+        Maintainer: tiar430 <tiar430@users.noreply.github.com>
+        Description: AI Agent for Android with Termux
+         A comprehensive AI Agent system designed for Android devices
+         running Termux, featuring multi-tasking capabilities, MCP
+         integration, and local AI support.
+        EOF
+        
+        # Copy application files
+        cp -r ../src data/data/com.termux/files/usr/share/agented/
+        cp ../package.json data/data/com.termux/files/usr/share/agented/
+        cp ../termux_setup.sh data/data/com.termux/files/usr/bin/agented-setup
+        chmod +x data/data/com.termux/files/usr/bin/agented-setup
+        
+        # Create postinst script
+        cat > DEBIAN/postinst << 'EOF'
+        #!/system/bin/sh
+        echo "Installing AI Agent for Termux..."
+        echo "Run 'agented-setup' to complete installation"
+        EOF
+        chmod +x DEBIAN/postinst
+        
+        # Build the package
+        cd ..
+        dpkg-deb --build termux-package agented-termux.deb
+        
+    - name: Upload Termux Package
+      uses: actions/upload-artifact@v3
+      with:
+        name: agented-termux-package
+        path: agented-termux.deb
+        retention-days: 30
